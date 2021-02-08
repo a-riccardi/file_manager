@@ -6,6 +6,7 @@ import utils
 if __name__ == "__main__":
     # example file path 
     path = r'C:\test_mdata_file.txt'
+
     # mdata generation
     test_mdata = mdata.MData(fpath=path)
     # adding some tags to the file
@@ -21,6 +22,7 @@ if __name__ == "__main__":
     print(test_mdata.get_file_size(unit=utils.FILESIZE.KILOBYTE))
 
     # serialize test_mdata and create a new copy
+    test_mdata.save()
     json_data = test_mdata.serialize()
     test_mdata_2 = mdata.MData(fpath=path, data=json_data)
 

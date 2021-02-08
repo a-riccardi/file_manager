@@ -16,7 +16,7 @@ Variables:
     FILESIZE
     FILTERMODE
 """
-
+import os
 import logging as log
 
 class BaseEnum(object):
@@ -59,3 +59,9 @@ class FilterMode(BaseEnum):
 
 FILESIZE = FileSize()
 FILTERMODE = FilterMode()
+
+def make_dirs_if_not_existent(filepath):
+    """Create a directory tree if not already existing"""
+
+    if not os.path.exists(filepath):
+        os.makedirs(filepath)

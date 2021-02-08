@@ -117,9 +117,25 @@ class MData(object):
             return False
 
     def save(self):
-        """TODO write to file or return a string, perform checks (?)"""
+        """Save this mdata to disk"""
 
-        self.serialize()
+        # generate .mdata file name and folder
+        mdata_name = os.path.basename(self.fpath).partition(".")[0]
+        mdata_folder_name = os.path.basename(os.path.dirname(self.fpath))
+        mdata_path = os.path.join(os.path.dirname(self.fpath), "{}.mdata".format(mdata_folder_name))
+        
+        # generate .mdata folder if not existent
+        utils.make_dirs_if_not_existent(mdata_path)
+
+        # generate proper .mdata path
+        mdata_path = os.path.join(mdata_path, "{}.mdata".format(mdata_name))
+        with open(mdata_path, "w+") as mdata_file:
+            try:
+                mdata_file.write(self.serialize())
+            except IOError as e:
+                log.error("Couldn't write metadata at <{}> because {}".format(mdata_path, e))
+                return False
+
         return True
 
     def serialize(self):
