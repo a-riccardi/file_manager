@@ -23,8 +23,7 @@ if __name__ == "__main__":
 
     # serialize test_mdata and create a new copy
     test_mdata.save()
-    json_data = test_mdata.serialize()
-    test_mdata_2 = mdata.MData(fpath=path, data=json_data)
+    test_mdata_2 = mdata.MData(fpath=path)
 
     # tag manipulation
     test_mdata_2.remove_tags("important")

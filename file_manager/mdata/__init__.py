@@ -16,7 +16,13 @@ import utils
 class MData(object):
     """Class representing arbitrary metadata associated with a file."""
 
-    def __init__(self, fpath, data=None):
+    fpath = None
+    m_time = None
+    c_time = None
+    size = None
+    data = {}
+
+    def __init__(self, fpath):
         self.fpath = fpath
 
         self.m_time = None
@@ -24,11 +30,7 @@ class MData(object):
         self.size = None
 
         self.get_common_mdata()
-
-        if data:
-            self.deserialize(data)
-        else:
-            self.data = {}
+        self.load()
 
     def __str__(self):
         return "MData file for <{}>{} Data:{}".format(self.fpath, "" if self.is_valid else " - INVALID", self.data)
@@ -86,13 +88,9 @@ class MData(object):
         except KeyError:
             tag_list = []
 
-
-        for t in tags:
-            tag_list.append(t)
+        tag_list.extend(tags)
         
         self.data["tags"] = list(set(tag_list))
-
-        return True
 
     def remove_tags(self, *tags):
         """Removes a list of tags from this mdata."""
@@ -100,18 +98,20 @@ class MData(object):
         try:
             tag_list = self.data["tags"]
         except KeyError:
-            return True
+            return
 
         self.data["tags"] = [t for t in tag_list if t not in tags]
-        return True
 
     def filter(self, mode, *tags):
         """Returns True if the mdata tags match the provided tags, based on 'mode'."""
 
+        # compute intersection between this mdata taglist and the filter tags
+        intersection = len(set.intersection(set(self.data["tags"]), set(tags)))
+
         if mode == utils.FILTERMODE.ANY:
-            return len(set.intersection(set(self.data["tags"]), set(tags))) > 0
+            return intersection > 0
         elif mode == utils.FILTERMODE.ALL:
-            return len(set.intersection(set(self.data["tags"]), set(tags))) == len(tags)
+            return intersection == len(tags)
         else:
             log.error("Invalid filter mode specified! ({}) Please provide a value from utils.FILTERMODE enum".format(mode))
             return False
@@ -119,16 +119,10 @@ class MData(object):
     def save(self):
         """Save this mdata to disk"""
 
-        # generate .mdata file name and folder
-        mdata_name = os.path.basename(self.fpath).partition(".")[0]
-        mdata_folder_name = os.path.basename(os.path.dirname(self.fpath))
-        mdata_path = os.path.join(os.path.dirname(self.fpath), "{}.mdata".format(mdata_folder_name))
+        # generate the .mdata file path
+        mdata_path = self.generate_mdata_filepath()
         
-        # generate .mdata folder if not existent
-        utils.make_dirs_if_not_existent(mdata_path)
-
-        # generate proper .mdata path
-        mdata_path = os.path.join(mdata_path, "{}.mdata".format(mdata_name))
+        # write .mdata file to disk
         with open(mdata_path, "w+") as mdata_file:
             try:
                 mdata_file.write(self.serialize())
@@ -137,6 +131,20 @@ class MData(object):
                 return False
 
         return True
+
+    def load(self):
+        """Load a .mdata file from disk"""
+
+        # generate the .mdata file path
+        mdata_path = self.generate_mdata_filepath()
+
+        # load .mdata file from disk
+        with open(mdata_path, "r") as mdata_file:
+            try:
+                self.deserialize(mdata_file.read())
+            except IOError as e:
+                log.error("Couldn't read metadata at <{}> because {}".format(mdata_path, e))
+                return False
 
     def serialize(self):
         """Returns a json string containing this object metadata for serialization"""
@@ -151,5 +159,23 @@ class MData(object):
 
     def deserialize(self, data):
         """Loads a json string into the data section of this MData class"""
-        #TODO add validation & other checks (?)
-        self.data = json.loads(data)
+        
+        try:
+            self.data = json.loads(data)
+        except ValueError as v_error:
+            log.error("Metadata deserialization failed for <{}> - {}".format(
+                self.fpath, v_error))
+
+    def generate_mdata_filepath(self):
+        """Generate the appropriate .data filepath based on the assigned fpath"""
+
+        # generate .mdata file name and folder
+        mdata_name = os.path.basename(self.fpath).partition(".")[0]
+        mdata_folder_name = os.path.basename(os.path.dirname(self.fpath))
+        mdata_path = os.path.join(os.path.dirname(self.fpath), "{}.mdata".format(mdata_folder_name))
+        
+        # generate .mdata folder if not existent
+        utils.make_dirs_if_not_existent(mdata_path)
+
+        # generate and return proper .mdata file path
+        return os.path.join(mdata_path, "{}.mdata".format(mdata_name))
