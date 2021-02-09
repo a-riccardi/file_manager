@@ -17,6 +17,7 @@ class MData(object):
     """Class representing arbitrary metadata associated with a file."""
 
     fpath = None
+    fname = None
     m_time = None
     c_time = None
     size = None
@@ -24,6 +25,7 @@ class MData(object):
 
     def __init__(self, fpath):
         self.fpath = fpath
+        self.fname = os.path.basename(fpath).partition(".")[0]
 
         self.m_time = None
         self.c_time = None
@@ -69,6 +71,11 @@ class MData(object):
             return ""
 
         return "{:.2f} {}(s)".format(self.size / math.pow(1024, unit), utils.FILESIZE.get_name(unit).capitalize())
+
+    def is_file_mdata(self, fname):
+        """"Returns True if this .mdata file is associated with the fname"""
+
+        return self.fname == fname
 
     def get_common_mdata(self):
         """Extract common data from the associated file object."""
@@ -121,7 +128,7 @@ class MData(object):
 
         # generate the .mdata file path
         mdata_path = self.generate_mdata_filepath()
-        
+
         # write .mdata file to disk
         with open(mdata_path, "w+") as mdata_file:
             try:
@@ -138,10 +145,14 @@ class MData(object):
         # generate the .mdata file path
         mdata_path = self.generate_mdata_filepath()
 
+        if not os.path.exists(mdata_path):
+            return False
+
         # load .mdata file from disk
         with open(mdata_path, "r") as mdata_file:
             try:
                 self.deserialize(mdata_file.read())
+                return True
             except IOError as e:
                 log.error("Couldn't read metadata at <{}> because {}".format(mdata_path, e))
                 return False
@@ -172,7 +183,7 @@ class MData(object):
         # generate .mdata file name and folder
         mdata_name = os.path.basename(self.fpath).partition(".")[0]
         mdata_folder_name = os.path.basename(os.path.dirname(self.fpath))
-        mdata_path = os.path.join(os.path.dirname(self.fpath), "{}.mdata".format(mdata_folder_name))
+        mdata_path = os.path.join(os.path.dirname(self.fpath), "{}_mdata".format(mdata_folder_name))
         
         # generate .mdata folder if not existent
         utils.make_dirs_if_not_existent(mdata_path)
