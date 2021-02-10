@@ -132,7 +132,7 @@ class MData(object):
         # write .mdata file to disk
         with open(mdata_path, "w+") as mdata_file:
             try:
-                mdata_file.write(self.serialize())
+                mdata_file.write(utils.xor_string(self.serialize()))
             except IOError as e:
                 log.error("Couldn't write metadata at <{}> because {}".format(mdata_path, e))
                 return False
@@ -151,7 +151,7 @@ class MData(object):
         # load .mdata file from disk
         with open(mdata_path, "r") as mdata_file:
             try:
-                self.deserialize(mdata_file.read())
+                self.deserialize(utils.xor_string(mdata_file.read()))
                 return True
             except IOError as e:
                 log.error("Couldn't read metadata at <{}> because {}".format(mdata_path, e))

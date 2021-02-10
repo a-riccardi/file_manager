@@ -17,6 +17,7 @@ Variables:
     FILTERMODE
 """
 import os
+import math
 import logging as log
 
 class BaseEnum(object):
@@ -60,6 +61,8 @@ class FilterMode(BaseEnum):
 FILESIZE = FileSize()
 FILTERMODE = FilterMode()
 
+KEY = "HGxyW0rs82VZdgIT9Sub"
+
 def make_dirs_if_not_existent(filepath):
     """Create a directory tree if not already existing."""
 
@@ -68,7 +71,7 @@ def make_dirs_if_not_existent(filepath):
 
 def byteify(input):
     """Transform a string object inside a json file to a proper string object.
-    
+
     Taken from https://stackoverflow.com/questions/956867/how-to-get-string-objects-instead-of-unicode-from-json/13105359#13105359
     """
 
@@ -81,3 +84,11 @@ def byteify(input):
         return input.encode('utf-8')
     else:
         return input
+
+def xor_string(string):
+    """XOR a string with a provided key"""
+
+    char_n = len(string) - len(KEY)
+    char_n = 0 if char_n < 0 else char_n
+    
+    return ''.join(chr(ord(s)^ord(k)) for s,k in zip(string, KEY * int(math.ceil(char_n / float(len(KEY))))))
