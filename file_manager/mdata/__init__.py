@@ -124,7 +124,7 @@ class MData(object):
             return False
 
     def save(self):
-        """Save this mdata to disk"""
+        """Save this mdata to disk."""
 
         # generate the .mdata file path
         mdata_path = self.generate_mdata_filepath()
@@ -140,7 +140,7 @@ class MData(object):
         return True
 
     def load(self):
-        """Load a .mdata file from disk"""
+        """Load a .mdata file from disk."""
 
         # generate the .mdata file path
         mdata_path = self.generate_mdata_filepath()
@@ -158,7 +158,7 @@ class MData(object):
                 return False
 
     def serialize(self):
-        """Returns a json string containing this object metadata for serialization"""
+        """Returns a json string containing this object metadata for serialization."""
 
         try:
             return json.dumps(self.data, sort_keys=True, indent=4,
@@ -169,16 +169,16 @@ class MData(object):
             return ""
 
     def deserialize(self, data):
-        """Loads a json string into the data section of this MData class"""
+        """Loads a json string into the data section of this MData class."""
         
         try:
-            self.data = json.loads(data)
+            self.data = utils.byteify(json.loads(data))
         except ValueError as v_error:
             log.error("Metadata deserialization failed for <{}> - {}".format(
                 self.fpath, v_error))
 
     def generate_mdata_filepath(self):
-        """Generate the appropriate .data filepath based on the assigned fpath"""
+        """Generate the appropriate .data filepath based on the assigned fpath."""
 
         # generate .mdata file name and folder
         mdata_name = os.path.basename(self.fpath).partition(".")[0]

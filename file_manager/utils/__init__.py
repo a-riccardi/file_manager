@@ -61,7 +61,23 @@ FILESIZE = FileSize()
 FILTERMODE = FilterMode()
 
 def make_dirs_if_not_existent(filepath):
-    """Create a directory tree if not already existing"""
+    """Create a directory tree if not already existing."""
 
     if not os.path.exists(filepath):
         os.makedirs(filepath)
+
+def byteify(input):
+    """Transform a string object inside a json file to a proper string object.
+    
+    Taken from https://stackoverflow.com/questions/956867/how-to-get-string-objects-instead-of-unicode-from-json/13105359#13105359
+    """
+
+    if isinstance(input, dict):
+        return {byteify(key): byteify(value)
+                for key, value in input.iteritems()}
+    elif isinstance(input, list):
+        return [byteify(element) for element in input]
+    elif isinstance(input, unicode):
+        return input.encode('utf-8')
+    else:
+        return input

@@ -11,7 +11,7 @@ dbase_path = os.path.join(DBASE_PATH, "file_manager.dbase")
 folder_dbase = {}
 
 def init():
-    """Initialize the folder list"""
+    """Initialize the folder list."""
 
     utils.make_dirs_if_not_existent(DBASE_PATH)
 
@@ -25,7 +25,7 @@ def init():
             pass
 
 def save():
-    """Save the database to disk"""
+    """Save the database to disk."""
 
     # write .dbase file to disk
     with open(dbase_path, "w+") as dbase_file:
@@ -38,7 +38,7 @@ def save():
     return True
 
 def serialize():
-    """Returns a json string containing the database for serialization"""
+    """Returns a json string containing the database for serialization."""
 
     try:
         return json.dumps(folder_dbase.keys(), sort_keys=True, indent=4,
@@ -48,7 +48,7 @@ def serialize():
         return ""
 
 def deserialize(data):           
-    """Loads a json string into the folder_dbase"""
+    """Loads a json string into the folder_dbase."""
 
     global folder_dbase
 
@@ -61,7 +61,7 @@ def deserialize(data):
             dbase_path, v_error))
 
 def load_folder_mdatas(dirpath):
-    """Load all .mdata files for this dirpath"""
+    """Load all .mdata files for this dirpath."""
 
     mdata_dirpath = os.path.join(dirpath, "{}.mdata".format(os.path.dirname(dirpath)))
 
@@ -69,14 +69,14 @@ def load_folder_mdatas(dirpath):
         return []
 
     mdatas = []
-    for root, dirs, files in os.walk(mdata_dirpath):
+    for root, _, files in os.walk(mdata_dirpath):
         for mdata_fname in files:
             mdatas.append(mdata.MData(os.path.join(root, mdata_fname)))
 
     return mdatas
 
 def create_mdata_for_file(fpath):
-    """Create a new .mdata file"""
+    """Create a new .mdata file."""
 
     global folder_dbase
 
@@ -104,7 +104,7 @@ def create_mdata_for_file(fpath):
     return mdata_file
 
 def get_mdata_for_file(fpath):
-    """Retrieve a MData class associated with fpath"""
+    """Retrieve a MData class associated with fpath."""
 
     global folder_dbase
 
@@ -116,7 +116,6 @@ def get_mdata_for_file(fpath):
     # get directory path
     fpath = os.path.abspath(fpath)
     dirpath = os.path.dirname(fpath)
-
 
     try:
         # get list of mdata for current folder
@@ -131,7 +130,7 @@ def get_mdata_for_file(fpath):
         return create_mdata_for_file(fpath)
 
 def add_tags_to_file(fpath, *tags):
-    """Add tags to a .mdata file"""
+    """Add tags to a .mdata file."""
   
     if not os.path.isfile(fpath):
         return
@@ -143,7 +142,7 @@ def add_tags_to_file(fpath, *tags):
         mdata_file.save()
     
 def remove_tags_from_file(fpath, *tags):
-    """Remove tags to a .mdata file"""
+    """Remove tags to a .mdata file."""
 
     if not os.path.isfile(fpath):
         return
@@ -154,9 +153,22 @@ def remove_tags_from_file(fpath, *tags):
         mdata_file.remove_tags(*tags)
         mdata_file.save()
 
-if __name__ == "__main__":
+def get_files_for_tags(mode, *tags):
+    """Get a list of paths that match the given tags with the provided mode."""
 
-    """Example usage for this module"""
+    global folder_dbase
+
+    matching_mdata = []
+
+    for _, folder_mdata in folder_dbase.items():
+        for mdata_file in folder_mdata:
+            if mdata_file.filter(mode, *tags):
+                matching_mdata.append(mdata_file)
+
+    return matching_mdata
+
+if __name__ == "__main__":
+    """Example usage for this module."""
 
     # example file path 
     fpath = r'C:\test_mdata_file.txt'
@@ -166,6 +178,14 @@ if __name__ == "__main__":
 
     # add tags to metadata for fpath, generates them if they don't exists
     add_tags_to_file(fpath, "text", "important", "test_tag")
+
+    # filter loaded mdata for given tags
+    files = get_files_for_tags(utils.FILTERMODE.ANY, "tex", "important")
+
+    try:
+        os.startfile(files[0].fpath)
+    except IndexError:
+        log.error("No match found for given tags & mode!")
 
     # save database
     save()
