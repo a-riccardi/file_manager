@@ -58,10 +58,22 @@ class FilterMode(BaseEnum):
     ANY = 0
     ALL = 1
 
+class FMCoreFiles(BaseEnum):
+    """Enum-like class to enumerate application files."""
+
+    DATABASE = 0
+    CONFIG = 1
+
+class FType(BaseEnum):
+    """Enum-like class to enumerate valida file types for MData initialization."""
+
+    FILE = 0
+    MDATA = 1
+
 FILESIZE = FileSize()
 FILTERMODE = FilterMode()
-
-KEY = "HGxyW0rs82VZdgIT9Sub"
+FMCOREFILES = FMCoreFiles()
+FTYPE = FType()
 
 def make_dirs_if_not_existent(filepath):
     """Create a directory tree if not already existing."""
@@ -69,26 +81,28 @@ def make_dirs_if_not_existent(filepath):
     if not os.path.exists(filepath):
         os.makedirs(filepath)
 
-def byteify(input):
+def json_decode(input):
     """Transform a string object inside a json file to a proper string object.
 
     Taken from https://stackoverflow.com/questions/956867/how-to-get-string-objects-instead-of-unicode-from-json/13105359#13105359
     """
 
     if isinstance(input, dict):
-        return {byteify(key): byteify(value)
+        return {json_decode(key) : json_decode(value)
                 for key, value in input.iteritems()}
     elif isinstance(input, list):
-        return [byteify(element) for element in input]
+        return [json_decode(element) for element in input]
     elif isinstance(input, unicode):
         return input.encode('utf-8')
     else:
         return input
 
-def xor_string(string):
-    """XOR a string with a provided key"""
+def clamp(val, min, max):
+    """Clamp the value between min and max."""
 
-    char_n = len(string) - len(KEY)
-    char_n = 0 if char_n < 0 else char_n
-    
-    return ''.join(chr(ord(s)^ord(k)) for s,k in zip(string, KEY * int(math.ceil(char_n / float(len(KEY))))))
+    if val <= min:
+        return min
+    elif val >= max:
+        return max
+
+    return val

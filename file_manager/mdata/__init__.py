@@ -11,7 +11,16 @@ import math
 import os
 from datetime import datetime
 
-import utils
+try:
+    import utils
+    import security
+except ImportError:
+    import sys
+    sys.path.append(os.path.dirname(os.path.dirname(
+        os.path.dirname(os.path.abspath(__file__)))))
+
+    from file_manager import utils
+    from file_manager import security
 
 class MData(object):
     """Class representing arbitrary metadata associated with a file."""
@@ -23,9 +32,17 @@ class MData(object):
     size = None
     data = {}
 
-    def __init__(self, fpath):
-        self.fpath = fpath
-        self.fname = os.path.basename(fpath).partition(".")[0]
+    def __init__(self, fpath, ftype=utils.FTYPE.FILE):
+
+        if not ftype == utils.FTYPE.MDATA:
+            self.fpath = fpath
+        else:
+            self.fpath = self.generate_fpath(fpath)
+
+        if not fpath:
+            log.error("Unable to initialize .mdata file for <{}>".format(self.fpath))
+
+        self.fname = os.path.basename(self.fpath).partition(".")[0]
 
         self.m_time = None
         self.c_time = None
@@ -42,6 +59,15 @@ class MData(object):
         """Perform checks to verify that the file is still valid."""
 
         return os.path.exists(self.fpath)
+
+    @property
+    def tags(self):
+        """Returns the tag associated with this file."""
+
+        try:
+            return self.data["tags"]
+        except KeyError:
+            return []
 
     @property
     def creation_time(self):
@@ -112,9 +138,12 @@ class MData(object):
     def filter(self, mode, *tags):
         """Returns True if the mdata tags match the provided tags, based on 'mode'."""
 
-        # compute intersection between this mdata taglist and the filter tags
-        intersection = len(set.intersection(set(self.data["tags"]), set(tags)))
-
+        try:
+            # compute intersection between this mdata taglist and the filter tags
+            intersection = len(set.intersection(set(self.data["tags"]), set(tags)))
+        except KeyError:
+            return False
+            
         if mode == utils.FILTERMODE.ANY:
             return intersection > 0
         elif mode == utils.FILTERMODE.ALL:
@@ -132,7 +161,7 @@ class MData(object):
         # write .mdata file to disk
         with open(mdata_path, "w+") as mdata_file:
             try:
-                mdata_file.write(utils.xor_string(self.serialize()))
+                mdata_file.write(security.xor_key(self.serialize()))
             except IOError as e:
                 log.error("Couldn't write metadata at <{}> because {}".format(mdata_path, e))
                 return False
@@ -151,7 +180,7 @@ class MData(object):
         # load .mdata file from disk
         with open(mdata_path, "r") as mdata_file:
             try:
-                self.deserialize(utils.xor_string(mdata_file.read()))
+                self.deserialize(security.xor_key(mdata_file.read()))
                 return True
             except IOError as e:
                 log.error("Couldn't read metadata at <{}> because {}".format(mdata_path, e))
@@ -172,7 +201,7 @@ class MData(object):
         """Loads a json string into the data section of this MData class."""
         
         try:
-            self.data = utils.byteify(json.loads(data))
+            self.data = utils.json_decode(json.loads(data))
         except ValueError as v_error:
             log.error("Metadata deserialization failed for <{}> - {}".format(
                 self.fpath, v_error))
@@ -181,7 +210,7 @@ class MData(object):
         """Generate the appropriate .data filepath based on the assigned fpath."""
 
         # generate .mdata file name and folder
-        mdata_name = os.path.basename(self.fpath).partition(".")[0]
+        mdata_name = os.path.basename(self.fpath).rpartition(".")[0]
         mdata_folder_name = os.path.basename(os.path.dirname(self.fpath))
         mdata_path = os.path.join(os.path.dirname(self.fpath), "{}_mdata".format(mdata_folder_name))
         
@@ -190,3 +219,51 @@ class MData(object):
 
         # generate and return proper .mdata file path
         return os.path.join(mdata_path, "{}.mdata".format(mdata_name))
+
+    def generate_fpath(self, mdata_path):
+        """Generate a proper fpath from a .mdata file path."""
+
+        # generate file name and folder
+        fname = os.path.basename(mdata_path).rpartition(".")[0]
+        folder_name = os.path.dirname(os.path.dirname(mdata_path))
+        ftype = None
+
+        # retrieve extension by scanning files in mdata_path parent folder
+        for _, _, files in os.walk(folder_name):
+            for f in files:
+                if f.rpartition(".")[0] == fname:
+                    ftype = f.rpartition(".")[2]
+                    break
+            break
+
+        if ftype is None:
+            log.error("No file existent for .mdata file at <{}>".format(self.fpath))
+            return None
+
+        return os.path.join(folder_name, "{}.{}".format(fname, ftype))
+
+if __name__ == "__main__":
+    """Example usage for this module."""
+
+    # example filepath
+    fpath = r'C:\test_mdata_file2.txt'
+
+    # generating mdata class
+    mdata = MData(fpath)
+
+    # adding tags
+    mdata.add_tags("text", "important", "test_tag")
+
+    # check that tag filtering is working
+    print mdata.filter(utils.FILTERMODE.ANY, "wrong_tag", "important")
+
+    # print file informations
+    print "creation time: {}".format(mdata.creation_time)
+    print "last edit time: {}".format(mdata.last_edit_time)
+    print "file size: {}".format(mdata.get_file_size(utils.FILESIZE.KILOBYTE))
+
+    # print file tags
+    print "file tags: {}".format(mdata.tags)
+
+    # save the modified metadata to disk
+    mdata.save()
