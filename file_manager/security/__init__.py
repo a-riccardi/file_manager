@@ -67,11 +67,11 @@ def xor_key(string):
 
     global FMANAGER
 
-    try:
-        if FMANAGER:
+    if FMANAGER:
+        try:
             return xor_string(string, generate_base_key(1024, FMANAGER.config["pw"]))
-    except KeyError:
-        pass
+        except KeyError:
+            pass    
 
     return xor_string(string, KEY)
 
