@@ -41,7 +41,12 @@ def generate_base_key(lenght, seed):
     """Generate a random password-like string of desired lenght."""
 
     random.seed(seed)
-    return "".join(random.choice(CHARSET) for i in range(lenght))
+    key = "".join(random.choice(CHARSET) for i in range(lenght))
+    
+    # clear the used seed to prevent other callers to random module to re-use the same seed
+    random.seed()
+
+    return key
 
 def generate_hardware_id():
     """Returns a hardware-specific ID for the current machine."""

@@ -32,7 +32,7 @@ config_path = os.path.join(DBASE_PATH, "file_manager.dbconfig")
 folder_dbase = {}
 config = {}
 
-def init():
+def init(hid=None):
     """Load the folder database and the config file."""
 
     utils.make_dirs_if_not_existent(DBASE_PATH)
@@ -42,7 +42,15 @@ def init():
     if os.path.exists(config_path):
         with open(config_path, "r") as config_file:
             try:
-                deserialize(security.xor_hid(config_file.read()), utils.FMCOREFILES.CONFIG)
+                
+                config_file_data = config_file.read()
+
+                if hid:
+                    config_file_data = security.xor_string(config_file_data, security.generate_base_key(1024, hid))
+                else:
+                    config_file_data = security.xor_hid(config_file_data)
+
+                deserialize(config_file_data, utils.FMCOREFILES.CONFIG)
             except IOError:
                 pass
 
@@ -255,6 +263,11 @@ def has_pw():
         return "pw" in config.keys()
     
     return False
+
+def get_hardware_id():
+    """Returns the hardware ID for this machine, to be manually saved by the user"""
+
+    return security.generate_hardware_id()
 
 if __name__ == "__main__":
     """Example usage for this module."""

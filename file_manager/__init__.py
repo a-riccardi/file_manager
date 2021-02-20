@@ -138,6 +138,34 @@ class FileManagerCmd(Cmd, object):
 
         file_manager.set_dbase_password(current_pw, new_pw)
 
+    def do_init_with_hwID(self, args):
+        """
+        init_with_hwID [hardware_id]
+        [hardware_id] : the old hardware ID with which the config file was encrypted with.
+
+        Re-loads the config file with a bespoke hardware-ID key. Use this function to restore the
+        content after hardware modifications
+        """
+
+        arglist, arglen = self.split_args(args)
+
+        if arglen != 1:
+            print "Error: wrong arguments provided! {}. Please provide the hardware ID you with to initialize the system with."
+            return
+
+        hw_id = arglist[0]
+
+        file_manager.init(hw_id)
+
+    def do_print_hwID(self, args):
+        """
+        print_hwID 
+
+        Print this machine Hardware ID
+        """
+
+        print file_manager.get_hardware_id()
+
     def do_quit(self, args):
         """Quits the program."""
 
