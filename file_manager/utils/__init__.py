@@ -70,10 +70,17 @@ class FType(BaseEnum):
     FILE = 0
     MDATA = 1
 
+class TagMode(BaseEnum):
+    """Enum-like class to enumerate tag modification modes."""
+
+    ADD = 0
+    REMOVE = 1
+
 FILESIZE = FileSize()
 FILTERMODE = FilterMode()
 FMCOREFILES = FMCoreFiles()
 FTYPE = FType()
+TAGMODE = TagMode()
 
 def make_dirs_if_not_existent(filepath):
     """Create a directory tree if not already existing."""

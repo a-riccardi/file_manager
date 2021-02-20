@@ -33,6 +33,7 @@ class MData(object):
     data = {}
 
     def __init__(self, fpath, ftype=utils.FTYPE.FILE):
+        """Initializa and load a .mdata file."""
 
         if not ftype == utils.FTYPE.MDATA:
             self.fpath = fpath
@@ -112,6 +113,16 @@ class MData(object):
         self.m_time = os.path.getmtime(self.fpath)
         self.c_time = os.path.getctime(self.fpath)
         self.size = os.path.getsize(self.fpath)
+
+    def tag(self, mode, *tags):
+        """Modify tags for this .mdata file based on 'mode'."""
+
+        if mode == utils.TAGMODE.ADD:
+            self.add_tags(*tags)
+        elif mode == utils.TAGMODE.REMOVE:
+            self.remove_tags(*tags)
+        else:
+            log.error("Invalid mode! {}. Please provide one between utils.TAGMODE.ADD and utils.TAGMODE.REMOVE".format(mode))
 
     def add_tags(self, *tags):
         """Adds a list of tags to this mdata. Redundant tags won't be added again."""
@@ -207,7 +218,7 @@ class MData(object):
                 self.fpath, v_error))
 
     def generate_mdata_filepath(self):
-        """Generate the appropriate .data filepath based on the assigned fpath."""
+        """Generate the appropriate .mdata filepath based on the assigned fpath."""
 
         # generate .mdata file name and folder
         mdata_name = os.path.basename(self.fpath).rpartition(".")[0]

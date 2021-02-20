@@ -33,7 +33,7 @@ folder_dbase = {}
 config = {}
 
 def init():
-    """Initialize the folder list."""
+    """Load the folder database and the config file."""
 
     utils.make_dirs_if_not_existent(DBASE_PATH)
 
@@ -77,7 +77,7 @@ def save():
     return dbase_save_result and config_save_result
 
 def serialize(fmcorefile):
-    """Returns a json string containing the database for serialization."""
+    """Returns a json string representation of an object for serialization."""
 
     global folder_dbase
     global config
@@ -96,7 +96,7 @@ def serialize(fmcorefile):
         return ""
 
 def deserialize(data, fmcorefile):           
-    """Loads a json string into the folder_dbase."""
+    """Loads a json string into the corresponding object."""
 
     global folder_dbase
     global config
@@ -167,7 +167,10 @@ def get_mdata_for_file(fpath):
 
     # get directory path
     fpath = os.path.abspath(fpath)
-    dirpath = os.path.dirname(fpath)
+    if os.path.isfile(fpath):
+        dirpath = os.path.dirname(fpath)
+    else:
+        dirpath = fpath
 
     try:
         # get list of mdata for current folder
@@ -178,34 +181,40 @@ def get_mdata_for_file(fpath):
             # return metadata if already cached, else create new MData
             return [md for md in folder_mdata if md.is_file_mdata(fname)][0]
         except IndexError:
-            log.error("Unable to retrieve .mdata for file at <{}>".format(fpath))
+            #log.error("Unable to retrieve .mdata for file at <{}>".format(fpath))
             return create_mdata_for_file(fpath)
     except KeyError:
         return create_mdata_for_file(fpath)
 
-def add_tags_to_file(fpath, *tags):
-    """Add tags to a .mdata file."""
-  
-    if not os.path.isfile(fpath):
+def list_mdata(folder_path):
+    """Returns a list of tagged files for the provided 'folder_path'"""
+
+    global folder_dbase
+
+    if folder_path and not os.path.isdir(folder_path):
+        log.error("Provided folder_path is not a folder! <{}>!" \
+        "Please provide a valid folder, or None to list all tagged files on this machine.".format(folder_path))
+        return []
+
+    if folder_path:
+        try:
+            return [md.fpath for md in folder_dbase[folder_path]]
+        except KeyError:
+            return []
+    else:
+        return [md.fpath for mdata_list in folder_dbase.values() for md in mdata_list]
+
+def tag(fpath, mode, *tags):
+    """Modify tags for the provided fpath."""
+
+    if not os.path.exists(fpath):
+        log.error("Can't modify tags for a non-existing file path <{}>".format(fpath))
         return
     
     mdata_file = get_mdata_for_file(fpath)
 
     if mdata_file:
-        mdata_file.add_tags(*tags)
-        mdata_file.save()
-    
-def remove_tags_from_file(fpath, *tags):
-    """Remove tags to a .mdata file."""
-
-    if not os.path.isfile(fpath):
-        return
-
-    mdata_file = get_mdata_for_file(fpath)
-
-    if mdata_file:
-        mdata_file.remove_tags(*tags)
-        mdata_file.save()
+        mdata_file.tag(mode, *tags)
 
 def get_files_for_tags(mode, *tags):
     """Get a list of paths that match the given tags with the provided mode."""
@@ -261,10 +270,10 @@ if __name__ == "__main__":
     set_dbase_password(None, "$up3r$Tr0ngPW!")
 
     # this will fail because the old password don't match the current one
-    set_dbase_password("wrong_pw__", "new_pw.")
+    set_dbase_password("wrong_pw!", "new_pw.")
 
     # add tags to metadata for fpath, generates them if they don't exists
-    add_tags_to_file(fpath, "text", "important", "test_tag")
+    tag(fpath, utils.TAGMODE.ADD, "text", "important", "test_tag")
 
     # filter loaded mdata for given tags
     files = get_files_for_tags(utils.FILTERMODE.ANY, "tex", "important")
