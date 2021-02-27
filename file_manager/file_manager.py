@@ -20,15 +20,22 @@ import os
 import logging as log
 import json
 import sys
+import uuid
+from collections import namedtuple
 
 import mdata
 import utils
 import security
 
+DBaseEntry = namedtuple("DBaseEntry", ["descriptor", "mdata_list"])
+DirDescriptor = namedtuple("DirDescriptor", ["dirpath", "dir_mdata_uuid"])
+
 DBASE_PATH = r'C:\Program Files\FileManager'
 dbase_path = os.path.join(DBASE_PATH, "file_manager.dbase")
 config_path = os.path.join(DBASE_PATH, "file_manager.dbconfig")
 
+# folder_dbase is a dict { dirpath : DBaseEntry } to allow bosth storage of
+# the mdata_list and of a DirDescriptor for serialization
 folder_dbase = {}
 config = {}
 
@@ -92,10 +99,10 @@ def serialize(fmcorefile):
 
     try:
         if fmcorefile == utils.FMCOREFILES.DATABASE:
-            return json.dumps(folder_dbase.keys(), sort_keys=True, indent=4,
+            return json.dumps([db_entry.descriptor._asdict() for db_entry in folder_dbase.values()], cls=utils.Encoder, sort_keys=False, indent=4,
                             separators=(',', ': '))
         elif fmcorefile == utils.FMCOREFILES.CONFIG:
-            return json.dumps(config, sort_keys=True, indent=4,
+            return json.dumps(config, sort_keys=False, indent=4,
                             separators=(',', ': '))
         else:
             raise ValueError("Invalid value for fmcorefile: <{}>. Please provide a value from utils.FMCOREFILES".format(fmcorefile))
@@ -111,9 +118,16 @@ def deserialize(data, fmcorefile):
 
     try:
         if fmcorefile == utils.FMCOREFILES.DATABASE:
-            folder_list = utils.json_decode(json.loads(data))
-            for f in folder_list:
-                folder_dbase[f] = load_folder_mdatas(f)
+            descriptor_list = utils.json_decode(json.loads(data))
+            for d_dict in descriptor_list:
+                try:
+                    # generate a DirDescriptor namedtuple from the deserialized dict
+                    # NOTE: the field must be in the same order as the namedtuple declaration
+                    dir_desc = DirDescriptor(**d_dict)
+                    folder_dbase[dir_desc.dirpath] = DBaseEntry(descriptor=dir_desc, mdata_list=load_folder_mdatas(dir_desc.dirpath))
+                except KeyError as ke:
+                    log.error("Unable to generate database entry from descriptor {}." /
+                        "Exception: {}".format(d_dict, ke))
         elif fmcorefile == utils.FMCOREFILES.CONFIG:
             config = utils.json_decode(json.loads(data))
     except ValueError as v_error:
@@ -149,7 +163,7 @@ def create_mdata_for_file(fpath):
 
     # get .mdata files for this folder 
     try:
-        folder_mdata = folder_dbase[dirpath]
+        folder_mdata = folder_dbase[dirpath].mdata_list
     except KeyError:
         folder_mdata = []
 
@@ -159,7 +173,10 @@ def create_mdata_for_file(fpath):
 
     # add this .mdata to the folder database
     folder_mdata.append(mdata_file)
-    folder_dbase[dirpath] = folder_mdata 
+    try:
+        folder_dbase[dirpath].mdata_list = folder_mdata 
+    except KeyError:
+        folder_dbase[dirpath] = DBaseEntry(descriptor=DirDescriptor(dirpath=dirpath, dir_mdata_uuid=uuid.uuid4()), mdata_list=folder_mdata)
 
     return mdata_file
 
@@ -182,7 +199,7 @@ def get_mdata_for_file(fpath):
 
     try:
         # get list of mdata for current folder
-        folder_mdata = folder_dbase[dirpath]
+        folder_mdata = folder_dbase[dirpath].mdata_list
         # get the file name for faster filtering
         fname = os.path.basename(fpath).rpartition(".")[0]
         try:
@@ -206,11 +223,11 @@ def list_mdata(folder_path):
 
     if folder_path:
         try:
-            return [md.fpath for md in folder_dbase[folder_path]]
+            return [md.fpath for md in folder_dbase[folder_path].mdata_list]
         except KeyError:
             return []
     else:
-        return [md.fpath for mdata_list in folder_dbase.values() for md in mdata_list]
+        return [md.fpath for db_entry in folder_dbase.values() for md in db_entry.mdata_list]
 
 def tag(fpath, mode, *tags):
     """Modify tags for the provided fpath."""
@@ -231,8 +248,8 @@ def get_files_for_tags(mode, *tags):
 
     matching_mdata = []
 
-    for _, folder_mdata in folder_dbase.items():
-        for mdata_file in folder_mdata:
+    for _, db_entry in folder_dbase.items():
+        for mdata_file in db_entry.mdata_list:
             if mdata_file.filter(mode, *tags):
                 matching_mdata.append(mdata_file)
 

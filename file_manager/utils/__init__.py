@@ -8,17 +8,29 @@ e.g.:
 import utils
 print(utils.FILESIZE.GIGABYTE) # should print '3'
 
+it also contains utility method for json serialization & deserialization, 
+as well as other utility methods
+
 Classes:
     FileSize
     FilterMode
+    FMCoreFiles
+    FType
+    TagMode
 
 Variables:
     FILESIZE
     FILTERMODE
+    FMCOREFILES
+    FTYPE
+    TAGMODE
 """
+
 import os
 import math
 import logging as log
+import json
+from uuid import UUID
 
 class BaseEnum(object):
     """ Base Class for enums. Should never be instantiated directly - instead subclass it into the desired Enum
@@ -82,17 +94,18 @@ FMCOREFILES = FMCoreFiles()
 FTYPE = FType()
 TAGMODE = TagMode()
 
-def make_dirs_if_not_existent(filepath):
-    """Create a directory tree if not already existing."""
+class Encoder(json.JSONEncoder):
+    """Specializes the default JSONEncoder to properly encode uuid objects"""
+    
+    # disable error on valid default() method override
+    def default(self, obj): # pylint: disable=E0202
+        if isinstance(obj, UUID):
+            return obj.hex
 
-    if not os.path.exists(filepath):
-        os.makedirs(filepath)
+        return json.JSONEncoder.default(self, obj)
 
 def json_decode(input):
-    """Transform a string object inside a json file to a proper string object.
-
-    Taken from https://stackoverflow.com/questions/956867/how-to-get-string-objects-instead-of-unicode-from-json/13105359#13105359
-    """
+    """Handles string and uuid decoding."""
 
     if isinstance(input, dict):
         return {json_decode(key) : json_decode(value)
@@ -100,9 +113,19 @@ def json_decode(input):
     elif isinstance(input, list):
         return [json_decode(element) for element in input]
     elif isinstance(input, unicode):
+        # decode string to avoid unicode object
         return input.encode('utf-8')
+    elif isinstance(input, UUID):
+        # decode uuid properly
+        return UUID(input)
     else:
         return input
+
+def make_dirs_if_not_existent(filepath):
+    """Create a directory tree if not already existing."""
+
+    if not os.path.exists(filepath):
+        os.makedirs(filepath)
 
 def clamp(val, min, max):
     """Clamp the value between min and max."""
