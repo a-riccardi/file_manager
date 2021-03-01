@@ -3,11 +3,49 @@ This module is the entry point for the file_system manager. Run this in a cmd to
 an interactive system to save, edit & query file tags.
 """
 
+import argparse
 from cmd import Cmd
 import os
+import tempfile
 
 import file_manager
 from file_manager import utils
+
+class CmdArgparseWrapper(object):
+    def __init__(self, parser):
+        """Init decorator with an argparse parser to be used in parsing cmd-line options"""
+        
+        self.parser = parser
+        self.help_msg = ""
+
+    def __call__(self, f):
+        """Decorate 'f' to parse 'line' and pass options to decorated function"""
+
+        if not self.parser:  # If no parser was passed to the decorator, get it from 'f'
+            self.parser = f(None, None, None, True)
+
+        def f_wrapper(*args):
+            line = args[1].split()
+
+            try:
+                parsed = self.parser.parse_args(line)
+            except SystemExit:
+                # catch the SystemExit exception to prevent the program from being closed
+                return
+
+            f(*args, parsed=parsed)
+
+        f_wrapper.__doc__ = self.__get_help(self.parser)
+        return f_wrapper
+
+    @staticmethod
+    def __get_help(parser):
+        """Get and return help message from 'parser.print_help()'"""
+
+        f = tempfile.SpooledTemporaryFile(max_size=2048)
+        parser.print_help(file=f)
+        f.seek(0)
+        return f.read().rstrip()
 
 class FileManagerCmd(Cmd, object):
     """Cmd interface for file_system.py"""
@@ -19,21 +57,22 @@ class FileManagerCmd(Cmd, object):
 
         file_manager.init()
 
-    def split_args(self, args):
-        """Returns the provided args to a func."""
-
-        arglist = args.split(" ")
-        return arglist, len(arglist)
-
     def do_save(self, args):
         """Save modifications to .mdata and .dbconfig files."""
 
         file_manager.save()
 
-    def do_tag(self, args):
+    __tag_parser = argparse.ArgumentParser(prog="tag")
+    __tag_parser.add_argument("path", help="a full path to a file/folder. Use | to indicate spaces in the path")
+    __tag_parser.add_argument("mode", choices=["add", "remove"], help="either 'add' (to add the provided tags to the path) " \
+                                                                    "or 'remove' (to remove the provided tags to the path)")
+    __tag_parser.add_argument("tags", nargs="*", help="a space-separated list of tags")
+
+    @CmdArgparseWrapper(parser=__tag_parser)
+    def do_tag(self, args, parsed):
         """
         tag [path] [mode] [tag(s)]
-        [path] : a full path to a file/folder
+        [path] : a full path to a file/folder. Use | to indicate spaces in the path
         [mode] : either 'add' (to add the provided tags to the path)
                  or 'remove' (to remove the provided tags to the path)
         [tag(s)] : a space-separated list of tags
@@ -41,19 +80,12 @@ class FileManagerCmd(Cmd, object):
         Modify tags for a specific file or a whole folder, depending on the provided path
         """
 
-        arglist, arglen = self.split_args(args)
-
-        if arglen < 3:
-            print("Error: not enough arguments provided! {}. Please provide a path to a file/folder," \
-                "add/remove as mode and a list of tags".format(arglist))
-            return
-
-        path = arglist[0]
+        path = parsed.path.replace("|", " ")
         if not os.path.exists(path):
-            print ("Error: provided path does not exists! <{}>. Please provide a valid path.")
+            print ("Error: provided path does not exists! <{}>. Please provide a valid path.".format(path))
             return
         
-        mode = arglist[1]
+        mode = parsed.mode
         if mode == "add":
             mode = utils.TAGMODE.ADD
         elif mode == "remove":
@@ -62,11 +94,17 @@ class FileManagerCmd(Cmd, object):
             print("Error: provided mode is invalid! '{}'. Please provide either 'add' or 'remove'.")
             return
         
-        tags = arglist[2:]
+        tags = parsed.tags
 
         file_manager.tag(path, mode, *tags)
 
-    def do_filter(self, args):
+    __filter_parser = argparse.ArgumentParser(prog="filter")
+    __filter_parser.add_argument("mode", choices=["all", "any"], help=" either 'all' (to return only files that match all provided tags) " \
+                                                                        "or 'any' (to return all files that match any of the provided tags)")
+    __filter_parser.add_argument("tags", nargs="*", help="a space-separated list of tags")
+
+    @CmdArgparseWrapper(parser=__filter_parser)
+    def do_filter(self, args, parsed):
         """
         filter [mode] [tag(s)]
         [mode] : either 'all' (to return only files that match all provided tags)
@@ -75,30 +113,29 @@ class FileManagerCmd(Cmd, object):
 
         Returns a list of files matching the provided 'tag(s)' using 'mode'.
         """
-
-        arglist, arglen = self.split_args(args)
-
-        if arglen < 2:
-            print "Error: not enough arguments provided! {}. Please provide at least a mode and a tag argument." \
-                "type 'help filter' for information about this command".format(arglist)
-            return
         
-        mode = arglist[0]
+        mode = parsed.mode
         if mode == "all":
             mode = utils.FILTERMODE.ALL
         elif mode == "any":
             mode = utils.FILTERMODE.ANY
         else:
-            print("Error: provided mode is invalid! '{}'. Please provide either 'all' or 'any'.")
+            print("Error: provided mode is invalid! '{}'. Please provide either 'all' or 'any'.".format(mode))
             return
         
-        tags = arglist[1:]
+        tags = parsed.tags
 
         flist = file_manager.get_files_for_tags(mode, *tags)
 
         print [md.fpath for md in flist] if len(flist) > 0 else "No match found for tags {} with mode {}".format(tags, mode)
 
-    def do_list_mdata(self, args):
+
+    __list_mdata_parser = argparse.ArgumentParser(prog="list_mdata")
+    __list_mdata_parser.add_argument("-fp", "--folder_path", nargs="?", default=None,
+                                    help="a full path to a folder. Use | to indicate spaces in the path")
+
+    @CmdArgparseWrapper(parser=__list_mdata_parser)
+    def do_list_mdata(self, args, parsed):
         """
         list_mdata [folder_path]
         [folder_path] : full path to a specific folder to inspect (if empty, all .mdata files will be listed)
@@ -106,15 +143,15 @@ class FileManagerCmd(Cmd, object):
         Returns a list of all tagged files inside 'folder_path'
         """
 
-        arglist, arglen = self.split_args(args)
+        print file_manager.list_mdata(parsed.folder_path)
 
-        if arglen > 1:
-            print "Error: too many arguments provided! {}. Please provide a path to a folder to query the tagged file inside," \
-                "or leave it empty to list all tagged files on this machine.".format(arglist)
+    __set_password_parser = argparse.ArgumentParser(prog="set_password")
+    __set_password_parser.add_argument("-cpw", "--current_pw", nargs="?", default=None,
+                                       help=" the current password (this is optional if no password was set)")
+    __set_password_parser.add_argument("new_pw", help="the desired password to use for mdata encryption")
 
-        print file_manager.list_mdata(arglist[0] if arglen > 0 else None)
-
-    def do_set_password(self, args):
+    @CmdArgparseWrapper(parser=__set_password_parser)
+    def do_set_password(self, args, parsed):
         """
         set_password [current_pw] [new_pw]
         [current_pw] : the current password (this is optional if no password was set)
@@ -123,22 +160,16 @@ class FileManagerCmd(Cmd, object):
         Sets or Updates the current encryption password.
         """
 
-        arglist, arglen = self.split_args(args)
-
-        if file_manager.has_pw():
-            if arglen != 2:
-                print "Error: wrong arguments provided! {}. Please provide the current password and the new password.".format(arglist)
-                return
-        elif arglen != 1:
-            print "Error: wrong enough arguments provided! {}. Please provide the password you wish to encrypt metadata with.".format(arglist)
-            return
-
-        current_pw = None if arglen < 2 else arglist[0]
-        new_pw = arglist[0 if arglen < 2 else 1]
+        current_pw = parsed.current_pw
+        new_pw = parsed.new_pw
 
         file_manager.set_dbase_password(current_pw, new_pw)
 
-    def do_init_with_hwID(self, args):
+    __init_with_hwID_parser = argparse.ArgumentParser(prog="init_with_hwID")
+    __init_with_hwID_parser.add_argument("hardware_id", help=" the old hardware ID with which the config file was encrypted with")
+
+    @CmdArgparseWrapper(parser=__init_with_hwID_parser)
+    def do_init_with_hwID(self, args, parsed):
         """
         init_with_hwID [hardware_id]
         [hardware_id] : the old hardware ID with which the config file was encrypted with.
@@ -147,13 +178,7 @@ class FileManagerCmd(Cmd, object):
         content after hardware modifications
         """
 
-        arglist, arglen = self.split_args(args)
-
-        if arglen != 1:
-            print "Error: wrong arguments provided! {}. Please provide the hardware ID you with to initialize the system with."
-            return
-
-        hw_id = arglist[0]
+        hw_id = parsed.hardware_id
 
         file_manager.init(hw_id)
 
