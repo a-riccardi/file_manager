@@ -9,7 +9,7 @@ import os
 import tempfile
 
 
-import file_manager
+import f_manager as file_manager
 from file_manager import utils
 from file_manager import mdata
 
@@ -215,9 +215,12 @@ class FileManagerCmd(Cmd, object):
         print "Quitting."
         raise SystemExit
 
-if __name__ == '__main__':
+def main():
     """Instantiate the FileManagerCmd class and start the main loop"""
 
     prompt = FileManagerCmd()
     prompt.prompt = '> '
     prompt.cmdloop('file_manager initialized.')
+
+if __name__ == '__main__':
+    main()
