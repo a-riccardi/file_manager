@@ -8,7 +8,6 @@ from cmd import Cmd
 import os
 import tempfile
 
-
 import f_manager as file_manager
 from file_manager import utils
 from file_manager import mdata
@@ -53,6 +52,7 @@ class FileManagerCmd(Cmd, object):
     """Cmd interface for file_system.py"""
 
     file_list = []
+    is_dirty = False
 
     def __init__(self):
         super(FileManagerCmd, self).__init__()
@@ -65,6 +65,7 @@ class FileManagerCmd(Cmd, object):
         """Save modifications to .mdata and .dbconfig files."""
 
         file_manager.save()
+        self.is_dirty = False
 
     __tag_parser = argparse.ArgumentParser(prog="tag")
     __tag_parser.add_argument("path", help="a full path to a file/folder. Use | to indicate spaces in the path")
@@ -101,6 +102,8 @@ class FileManagerCmd(Cmd, object):
         tags = parsed.tags
 
         file_manager.tag(path, mode, *tags)
+
+        self.is_dirty = True
 
     __filter_parser = argparse.ArgumentParser(prog="filter")
     __filter_parser.add_argument("mode", choices=["all", "any"], help=" either 'all' (to return only files that match all provided tags) " \
@@ -183,6 +186,8 @@ class FileManagerCmd(Cmd, object):
 
         file_manager.set_dbase_password(current_pw, new_pw)
 
+        self.is_dirty = True
+
     __init_with_hwID_parser = argparse.ArgumentParser(prog="init_with_hwID")
     __init_with_hwID_parser.add_argument("hardware_id", help=" the old hardware ID with which the config file was encrypted with")
 
@@ -211,6 +216,9 @@ class FileManagerCmd(Cmd, object):
 
     def do_quit(self, args):
         """Quits the program."""
+
+        if self.is_dirty:
+            self.do_save(args)
 
         print "Quitting."
         raise SystemExit
