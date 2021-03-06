@@ -52,6 +52,8 @@ class CmdArgparseWrapper(object):
 class FileManagerCmd(Cmd, object):
     """Cmd interface for file_system.py"""
 
+    file_list = []
+
     def __init__(self):
         super(FileManagerCmd, self).__init__()
 
@@ -128,10 +130,24 @@ class FileManagerCmd(Cmd, object):
         tags = parsed.tags
 
         flist = file_manager.get_files_for_tags(mode, *tags)
+        self.file_list = [md.fpath if isinstance(md, mdata.MData) else md for md in flist]
 
-        print [md.fpath if isinstance(md, mdata.MData) else md for md in flist] if len(flist) > 0 else "No match found for tags {} with mode {}".format(tags, mode)
+        print self.file_list if len(self.file_list) > 0 else "No match found for tags {} with mode {}".format(tags, mode)
 
 
+    def do_open(self, args):
+        """
+        open 
+
+        Open the first file into the queried file list
+        """
+
+        if len(self.file_list) == 0:
+            print("No file queried. Create a list of file using 'filter' function")
+            return
+
+        os.startfile(self.file_list.pop(0))
+    
     __list_mdata_parser = argparse.ArgumentParser(prog="list_mdata")
     __list_mdata_parser.add_argument("-fp", "--folder_path", nargs="?", default=None,
                                     help="a full path to a folder. Use | to indicate spaces in the path")

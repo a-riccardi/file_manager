@@ -287,7 +287,7 @@ def get_files_for_tags(mode, *tags):
     for dirpath, db_entry in folder_dbase.items():
         if db_entry.dir_mdata.filter(mode, *tags):
             # if dir_mdata matches the tags, return all files inside this dirpath
-            matching_mdata.extend(os.listdir(dirpath))
+            matching_mdata.extend([os.path.join(dirpath, fp) for fp in os.listdir(dirpath)])
         else:
             # else, filter each .mdata file in this directory individually
             for mdata_file in db_entry.mdata_list:
