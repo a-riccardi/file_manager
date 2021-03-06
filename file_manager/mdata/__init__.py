@@ -16,11 +16,11 @@ try:
     import security
 except ImportError:
     import sys
-    sys.path.append(os.path.dirname(os.path.dirname(
-        os.path.dirname(os.path.abspath(__file__)))))
+    # append the parent folder path to sys.path to retrieve utils and security modules
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-    from file_manager import utils
-    from file_manager import security
+    import utils
+    import security
 
 class MData(object):
     """Class representing arbitrary metadata associated with a file."""
@@ -31,14 +31,17 @@ class MData(object):
     c_time = None
     size = None
     data = {}
+    save_path = None
 
-    def __init__(self, fpath, ftype=utils.FTYPE.FILE):
+    def __init__(self, fpath, ftype=utils.FTYPE.FILE, autoload=True):
         """Initializa and load a .mdata file."""
 
-        if not ftype == utils.FTYPE.MDATA:
-            self.fpath = fpath
-        else:
+        if ftype == utils.FTYPE.MDATA:
+            # if loading from a .mdata file, retrieve the actual path
             self.fpath = self.generate_fpath(fpath)
+        else:
+            # if creating .mdata from an actual file, just store the fpath
+            self.fpath = fpath
 
         if not fpath:
             log.error("Unable to initialize .mdata file for <{}>".format(self.fpath))
@@ -50,7 +53,8 @@ class MData(object):
         self.size = None
 
         self.get_common_mdata()
-        self.load()
+        if autoload:
+            self.load()
 
     def __str__(self):
         return "MData file for <{}>{} Data:{}".format(self.fpath, "" if self.is_valid else " - INVALID", self.data)
@@ -163,11 +167,19 @@ class MData(object):
             log.error("Invalid filter mode specified! ({}) Please provide a value from utils.FILTERMODE enum".format(mode))
             return False
 
+    def override_save_path(self, dirpath, fname):
+        """Override the save path for this .mdata file"""
+        
+        self.save_path = os.path.join(dirpath, "{}.mdata".format(fname))
+
     def save(self):
         """Save this mdata to disk."""
 
         # generate the .mdata file path
-        mdata_path = self.generate_mdata_filepath()
+        if not self.save_path:
+            mdata_path = self.generate_mdata_filepath()
+        else:
+            mdata_path = self.save_path
 
         # write .mdata file to disk
         with open(mdata_path, "w+") as mdata_file:
@@ -183,7 +195,10 @@ class MData(object):
         """Load a .mdata file from disk."""
 
         # generate the .mdata file path
-        mdata_path = self.generate_mdata_filepath()
+        if not self.save_path:
+            mdata_path = self.generate_mdata_filepath()
+        else:
+            mdata_path = self.save_path
 
         if not os.path.exists(mdata_path):
             return False
@@ -259,8 +274,12 @@ if __name__ == "__main__":
     # example filepath
     fpath = r'C:\test_mdata_file2.txt'
 
+    fpath = r'D:\andre'
+
     # generating mdata class
-    mdata = MData(fpath)
+    mdata = MData(fpath, autoload=False)
+    mdata.override_save_path(r"C:\Program Files\FileManager\dir_mdata", "1234-5678-12-34-5678")
+    mdata.load()
 
     # adding tags
     mdata.add_tags("text", "important", "test_tag")

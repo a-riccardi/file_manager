@@ -8,8 +8,10 @@ from cmd import Cmd
 import os
 import tempfile
 
+
 import file_manager
 from file_manager import utils
+from file_manager import mdata
 
 class CmdArgparseWrapper(object):
     def __init__(self, parser):
@@ -127,7 +129,7 @@ class FileManagerCmd(Cmd, object):
 
         flist = file_manager.get_files_for_tags(mode, *tags)
 
-        print [md.fpath for md in flist] if len(flist) > 0 else "No match found for tags {} with mode {}".format(tags, mode)
+        print [md.fpath if isinstance(md, mdata.MData) else md for md in flist] if len(flist) > 0 else "No match found for tags {} with mode {}".format(tags, mode)
 
 
     __list_mdata_parser = argparse.ArgumentParser(prog="list_mdata")

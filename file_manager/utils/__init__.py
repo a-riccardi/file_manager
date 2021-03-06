@@ -100,7 +100,7 @@ class Encoder(json.JSONEncoder):
     # disable error on valid default() method override
     def default(self, obj): # pylint: disable=E0202
         if isinstance(obj, UUID):
-            return obj.hex
+            return str(obj)
 
         return json.JSONEncoder.default(self, obj)
 

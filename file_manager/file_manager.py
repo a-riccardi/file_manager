@@ -27,12 +27,13 @@ import mdata
 import utils
 import security
 
-DBaseEntry = namedtuple("DBaseEntry", ["descriptor", "mdata_list"])
-DirDescriptor = namedtuple("DirDescriptor", ["dirpath", "dir_mdata_uuid"])
+DBaseEntry = namedtuple("DBaseEntry", ["descriptor", "mdata_list", "dir_mdata"])
+DirDescriptor = namedtuple("DirDescriptor", ["dirpath", "dir_uuid"])
 
 DBASE_PATH = r'C:\Program Files\FileManager'
 dbase_path = os.path.join(DBASE_PATH, "file_manager.dbase")
 config_path = os.path.join(DBASE_PATH, "file_manager.dbconfig")
+dir_mdata_path = os.path.join(DBASE_PATH, "dir_mdata")
 
 # folder_dbase is a dict { dirpath : DBaseEntry } to allow bosth storage of
 # the mdata_list and of a DirDescriptor for serialization
@@ -41,6 +42,9 @@ config = {}
 
 def init(hid=None):
     """Load the folder database and the config file."""
+
+    global config_path
+    global dbase_path
 
     utils.make_dirs_if_not_existent(DBASE_PATH)
 
@@ -71,11 +75,18 @@ def init(hid=None):
 def save():
     """Save the database to disk."""
 
+    global dbase_path
+    global config_path
+
     dbase_save_result = True
     # write .dbase file to disk
     with open(dbase_path, "w+") as dbase_file:
         try:
             dbase_file.write(serialize(utils.FMCOREFILES.DATABASE))
+
+            for _, db_entry in folder_dbase.items():
+                db_entry.dir_mdata.save()
+
         except IOError as e:
             log.error("Couldn't write dbase at <{}> because {}".format(dbase_path, e))
             dbase_save_result = False
@@ -113,6 +124,7 @@ def serialize(fmcorefile):
 def deserialize(data, fmcorefile):           
     """Loads a json string into the corresponding object."""
 
+    global dir_mdata_path
     global folder_dbase
     global config
 
@@ -124,10 +136,14 @@ def deserialize(data, fmcorefile):
                     # generate a DirDescriptor namedtuple from the deserialized dict
                     # NOTE: the field must be in the same order as the namedtuple declaration
                     dir_desc = DirDescriptor(**d_dict)
-                    folder_dbase[dir_desc.dirpath] = DBaseEntry(descriptor=dir_desc, mdata_list=load_folder_mdatas(dir_desc.dirpath))
+
+                    dir_mdata = mdata.MData(dir_desc.dirpath, autoload=False)
+                    dir_mdata.override_save_path(dir_mdata_path, dir_desc.dir_uuid)
+                    dir_mdata.load()
+
+                    folder_dbase[dir_desc.dirpath] = DBaseEntry(descriptor=dir_desc, mdata_list=load_folder_mdatas(dir_desc.dirpath), dir_mdata=dir_mdata)
                 except KeyError as ke:
-                    log.error("Unable to generate database entry from descriptor {}." /
-                        "Exception: {}".format(d_dict, ke))
+                    log.error("Unable to generate database entry from descriptor {}. Exception: {}".format(d_dict, ke))
         elif fmcorefile == utils.FMCOREFILES.CONFIG:
             config = utils.json_decode(json.loads(data))
     except ValueError as v_error:
@@ -137,7 +153,7 @@ def deserialize(data, fmcorefile):
 def load_folder_mdatas(dirpath):
     """Load all .mdata files for this dirpath."""
 
-    mdata_dirpath = os.path.join(dirpath, "{}_mdata".format(os.path.dirname(dirpath)))
+    mdata_dirpath = os.path.join(dirpath, "_mdata")
 
     if not os.path.exists(mdata_dirpath):
         return []
@@ -176,9 +192,25 @@ def create_mdata_for_file(fpath):
     try:
         folder_dbase[dirpath].mdata_list = folder_mdata 
     except KeyError:
-        folder_dbase[dirpath] = DBaseEntry(descriptor=DirDescriptor(dirpath=dirpath, dir_mdata_uuid=uuid.uuid4()), mdata_list=folder_mdata)
+        generate_dbase_entry(dirpath)
 
     return mdata_file
+
+def generate_dbase_entry(dirpath):
+    """Generate a new entry for the provided dirpath"""
+
+    global folder_dbase
+    global dir_mdata_path
+
+    # generate random id for this directory mdata file
+    dir_mdata_uuid = uuid.uuid4()
+
+    # create the mdata object for this directory
+    dir_mdata = mdata.MData(dirpath, autoload=False)
+    dir_mdata.override_save_path(dir_mdata_path, dir_mdata_uuid)
+    dir_mdata.load()
+
+    folder_dbase[dirpath] = DBaseEntry(descriptor=DirDescriptor(dirpath=dirpath, dir_uuid=dir_mdata_uuid), mdata_list=[], dir_mdata=dir_mdata)
 
 def get_mdata_for_file(fpath):
     """Retrieve a MData class associated with fpath."""
@@ -231,15 +263,19 @@ def list_mdata(folder_path):
 
 def tag(fpath, mode, *tags):
     """Modify tags for the provided fpath."""
-
-    if not os.path.exists(fpath):
-        log.error("Can't modify tags for a non-existing file path <{}>".format(fpath))
-        return
     
-    mdata_file = get_mdata_for_file(fpath)
+    if os.path.isfile(fpath):
+        mdata_file = get_mdata_for_file(fpath)
 
-    if mdata_file:
-        mdata_file.tag(mode, *tags)
+        if mdata_file:
+            mdata_file.tag(mode, *tags)
+    elif os.path.isdir(fpath):
+        if not fpath in folder_dbase.keys():
+            generate_dbase_entry(fpath)
+
+        folder_dbase[fpath].dir_mdata.tag(mode, *tags)
+    else:
+        log.error("Can't modify tags for a non-existing path <{}>".format(fpath))
 
 def get_files_for_tags(mode, *tags):
     """Get a list of paths that match the given tags with the provided mode."""
@@ -248,10 +284,15 @@ def get_files_for_tags(mode, *tags):
 
     matching_mdata = []
 
-    for _, db_entry in folder_dbase.items():
-        for mdata_file in db_entry.mdata_list:
-            if mdata_file.filter(mode, *tags):
-                matching_mdata.append(mdata_file)
+    for dirpath, db_entry in folder_dbase.items():
+        if db_entry.dir_mdata.filter(mode, *tags):
+            # if dir_mdata matches the tags, return all files inside this dirpath
+            matching_mdata.extend(os.listdir(dirpath))
+        else:
+            # else, filter each .mdata file in this directory individually
+            for mdata_file in db_entry.mdata_list:
+                if mdata_file.filter(mode, *tags):
+                    matching_mdata.append(mdata_file)
 
     return matching_mdata
 
@@ -305,8 +346,14 @@ if __name__ == "__main__":
     # add tags to metadata for fpath, generates them if they don't exists
     tag(fpath, utils.TAGMODE.ADD, "text", "important", "test_tag")
 
+    # get the directory for fpath
+    dpath = os.path.dirname(fpath)
+
+    # add tags to the folder in which fpath is contained
+    tag(dpath, utils.TAGMODE.ADD, "common_folder_tag", "inherited_tag")
+
     # filter loaded mdata for given tags
-    files = get_files_for_tags(utils.FILTERMODE.ANY, "tex", "important")
+    files = get_files_for_tags(utils.FILTERMODE.ANY, "inherited_tag", "non_existent_tag")
 
     try:
         os.startfile(files[0].fpath)
